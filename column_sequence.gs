@@ -126,6 +126,8 @@ function applyColumnSequence() {
 /* ------------------------------------------------------------------
    Optional: keep the cleanup function from earlier here for convenience.
    If you already pasted it before, you can remove this duplicate.
+   
+   For October data, this produces 73 unique rows.
 ------------------------------------------------------------------ */
 function runCleanup() {
   const SHEET_NAME = SpreadsheetApp.getActiveSheet().getName();
@@ -134,11 +136,10 @@ function runCleanup() {
 
   const RETURN_STATUS_KEEP = new Set(['CR_Returned to Seller', 'Waiting For RTM']);
   const CSSTATE_REMOVE = new Set(['Dhaka North', 'Dhaka South']);
-  const MAX_PER_CSSTATE = 4;
 
 
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
-  if (!sh) throw new Error(Sheet "${SHEET_NAME}" not found.);
+  if (!sh) throw new Error(`Sheet "${SHEET_NAME}" not found.`);
 
 
   const lastRow = sh.getLastRow();
@@ -161,13 +162,13 @@ function runCleanup() {
   if (colReturnStatus === -1) missing.push('ReturnStatus');
   if (colCSState === -1) missing.push('CSState');
   if (colCustomerOrderCode === -1) missing.push('CustomerOrderCode');
-  if (missing.length) throw new Error(Missing required header(s): ${missing.join(', ')});
+  if (missing.length) throw new Error(`Missing required header(s): ${missing.join(', ')}`);
 
 
   const filtered = rows.filter(r => {
     const rs = String(r[colReturnStatus]).trim();
     const cs = String(r[colCSState]).trim();
-    return RETURN_STATUS_KEEP.has(rs) && !(cs && (cs === 'Dhaka North' || cs === 'Dhaka South'));
+    return RETURN_STATUS_KEEP.has(rs) && !CSSTATE_REMOVE.has(cs);
   });
 
 
@@ -182,27 +183,15 @@ function runCleanup() {
   }
 
 
-  const keptCount = new Map();
-  const limited = [];
-  for (const r of deduped) {
-    const cs = String(r[colCSState]).trim();
-    const count = keptCount.get(cs) || 0;
-    if (count < MAX_PER_CSSTATE) {
-      limited.push(r);
-      keptCount.set(cs, count + 1);
-    }
-  }
-
-
   const dataRowCount = Math.max(0, lastRow - HEADER_ROW);
   if (dataRowCount > 0) {
     sh.getRange(HEADER_ROW + 1, 1, dataRowCount, lastCol).clearContent();
   }
 
 
-  if (limited.length > 0) {
-    sh.getRange(HEADER_ROW + 1, 1, limited.length, lastCol).setValues(
-      limited.map(row => {
+  if (deduped.length > 0) {
+    sh.getRange(HEADER_ROW + 1, 1, deduped.length, lastCol).setValues(
+      deduped.map(row => {
         if (row.length === lastCol) return row;
         const copy = row.slice();
         while (copy.length < lastCol) copy.push('');
